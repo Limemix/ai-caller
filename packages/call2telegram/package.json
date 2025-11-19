@@ -1,0 +1,35 @@
+{
+  "name": "@ai/call2telegram",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@bull-board/api": "^6.14.2",
+    "@bull-board/express": "^6.14.2",
+    "@google/genai": "^1.19.0",
+    "@prisma/client": "^6.16.3",
+    "bull": "^4.16.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "googleapis": "^162.0.0",
+    "inquirer": "^12.9.6",
+    "redis": "^5.8.2",
+    "uuid": "^13.0.0",
+    "wav": "^1.0.2",
+    "wavefile": "^11.0.0",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.6.2",
+    "prisma": "^6.16.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

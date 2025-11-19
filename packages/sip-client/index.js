@@ -8,7 +8,8 @@ async function main() {
         await client.connect();
         console.log('Подключено к SIP серверу!');
         
-        const phoneNumber = process.argv[2] || '380970793024';
+        // const phoneNumber = process.argv[2] || '380970793024';
+        const phoneNumber = process.argv[2] || '380683335467';
         const callId = await client.call(phoneNumber);
         console.log(`📞 Calling ${phoneNumber}, callId: ${callId}`);
         

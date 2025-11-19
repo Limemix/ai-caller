@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id                       String  @id
+  companyId                String  @unique
+  bot_instructions         String?
+  calls_enabled            Boolean @default(false)
+  bot_instructions_preview String?
+  Company                  Company @relation(fields: [companyId], references: [id])
+}
+
+model CallRecord {
+  id         String   @id
+  date       DateTime @default(now())
+  phone      String
+  companyId  String
+  userId     String
+  transcript String
+  audioUrl   String?
+  comment    String?
+  Company    Company  @relation(fields: [companyId], references: [id])
+}
+
+model Company {
+  id         String       @id
+  name       String
+  Agent      Agent?
+  CallRecord CallRecord[]
+  User       User[]
+}
+
+model User {
+  id        String   @id
+  phone     String   @unique
+  role      UserRole
+  companyId String
+  Company   Company  @relation(fields: [companyId], references: [id])
+}
+
+enum UserRole {
+  admin
+  manager
+}
