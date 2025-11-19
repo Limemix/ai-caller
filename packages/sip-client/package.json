@@ -1,0 +1,29 @@
+{
+  "name": "@ai/sip-client",
+  "version": "1.0.0",
+  "description": "CallEXP - AI Callcenter for Zadarma (or another SIP Provider)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^1.28.0",
+    "@prisma/client": "^6.18.0",
+    "dgram": "^1.0.1",
+    "dotenv": "^17.2.3",
+    "wavefile": "^11.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.18.0"
+  }
+}
