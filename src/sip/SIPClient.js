@@ -11,7 +11,7 @@ class SIPClient extends EventEmitter {
     constructor(config) {
         super();
         this.config = config;
-        this.logger = new Logger();
+        this.logger = new Logger(false);
         this.sipAuth = new SipAuthentication(config);
         this.messageBuilder = new SipMessageBuilder(config);
         this.sipHandler = new SIPHandler();
@@ -35,75 +35,44 @@ class SIPClient extends EventEmitter {
             }
         }, 20000);
         this.reregisterInterval = setInterval(() => {
-            if (this.activeCalls.size === 0) { 
+            if (this.activeCalls.size === 0) {
                 this.reregister();
             }
         }, 300000);
     }
 
+    // 🔥 ИСПРАВЛЕНИЕ 1: Этот метод больше не вызываем, он ломал аудио
     startCallKeepAlive(callId) {
+        // Для коротких звонков Session Refresh (re-INVITE) делает больше вреда, чем пользы,
+        // если не реализована полная обработка 200 OK на re-INVITE.
+        // RTP keep-alive и OPTIONS достаточно.
+        return; 
+        
+        /* Старый код закомментирован:
         const call = this.activeCalls.get(callId);
         if (!call) return;
-
         this.logger.info(`🫀 Starting session keep-alive for call ${callId}`);
-
         call.sessionKeepAliveInterval = setInterval(() => {
             if (call.state === 'connected' && call.toTag && !call.refreshInProgress) {
                 this.sendSessionRefresh(callId);
             }
         }, 25000);
+        */
     }
 
     async sendSessionRefresh(callId) {
-        const call = this.activeCalls.get(callId);
-        if (!call || call.refreshInProgress) return;
-
-        call.refreshInProgress = true;
-        this.logger.info(`🔄 Sending session refresh (re-INVITE) for call ${callId}`);
-
-        const branch = this.messageBuilder.generateBranch();
-        const sdp = this.messageBuilder.buildSdpOffer(call.rtpPort);
-
-        const refreshCSeq = call.cseq + 1000 + Math.floor(Math.random() * 100);
-
-        const reInviteMsg = `INVITE sip:${call.targetNumber}@${this.config.sip.server} SIP/2.0\r
-Via: SIP/2.0/UDP ${this.config.sip.localIp}:${this.config.sip.localPort};branch=${branch};rport\r
-Max-Forwards: 70\r
-From: <sip:${this.config.sip.username}@${this.config.sip.server}>;tag=${call.fromTag}\r
-To: <sip:${call.targetNumber}@${this.config.sip.server}>;tag=${call.toTag}\r
-Call-ID: ${callId}\r
-CSeq: ${refreshCSeq} INVITE\r
-Contact: <sip:${this.config.sip.username}@${this.config.sip.localIp}:${this.config.sip.localPort}>\r
-Content-Type: application/sdp\r
-User-Agent: ${this.config.sip.userAgent}\r
-Content-Length: ${sdp.length}\r
-\r
-${sdp}`;
-
-        try {
-            await this.sendSipMessage(reInviteMsg);
-
-            call.lastRefreshCSeq = refreshCSeq;
-
-            setTimeout(() => {
-                call.refreshInProgress = false;
-            }, 5000);
-
-        } catch (error) {
-            this.logger.error('❌ Error sending session refresh:', error);
-            call.refreshInProgress = false;
-        }
+        // Метод оставлен для совместимости, но не используется
     }
+
+    // ... (reregister, sendOptions, buildOptionsMessage, setupHandlers, sendInfoResponse, connect, resolveServerAddress, register остаются без изменений)
 
     async reregister() {
         if (!this.isRegistered) return;
-
         this.logger.info('🔄 Re-registering with SIP server');
         try {
             const callId = this.generateCallId();
             const fromTag = this.messageBuilder.generateTag();
             const cseq = 1;
-
             const registerMsg = this.messageBuilder.buildRegister(callId, fromTag, cseq);
             await this.sendSipMessage(registerMsg);
         } catch (error) {
@@ -113,13 +82,10 @@ ${sdp}`;
 
     async sendOptions() {
         if (!this.isRegistered) return;
-
         const callId = this.generateCallId();
         const fromTag = this.messageBuilder.generateTag();
         const cseq = 5000 + Math.floor(Math.random() * 1000);
-
         const optionsMsg = this.buildOptionsMessage(callId, fromTag, cseq);
-
         try {
             await this.sendSipMessage(optionsMsg);
             this.logger.debug('🫀 Sent OPTIONS keep-alive');
@@ -178,7 +144,6 @@ Content-Length: 0\r
     async sendInfoResponse(callId, originalMessage) {
         const call = this.activeCalls.get(callId);
         if (!call) return;
-
         const lines = originalMessage.split('\r\n');
         let cseq = null;
         for (const line of lines) {
@@ -187,9 +152,7 @@ Content-Length: 0\r
                 break;
             }
         }
-
         if (!cseq) return;
-
         const response = `SIP/2.0 200 OK\r
 Via: SIP/2.0/UDP ${this.config.sip.server}\r
 From: <sip:${this.config.sip.username}@${this.config.sip.server}>;tag=${call.fromTag}\r
@@ -200,7 +163,6 @@ User-Agent: ${this.config.sip.userAgent}\r
 Content-Length: 0\r
 \r
 `;
-
         try {
             await this.sendSipMessage(response);
             this.logger.debug('✅ Sent 200 OK for INFO');
@@ -213,17 +175,14 @@ Content-Length: 0\r
         return new Promise((resolve, reject) => {
             try {
                 this.sipSocket = dgram.createSocket('udp4');
-
                 this.sipSocket.on('message', (msg, rinfo) => {
                     const message = msg.toString();
                     this.handleSipMessage(message, rinfo);
                 });
-
                 this.sipSocket.on('error', (err) => {
                     this.logger.error('SIP socket error:', err);
                     reject(err);
                 });
-
                 this.sipSocket.on('listening', async () => {
                     this.logger.info(`✅ SIP client listening on ${this.config.sip.localIp}:${this.config.sip.localPort}`);
                     try {
@@ -234,7 +193,6 @@ Content-Length: 0\r
                         reject(error);
                     }
                 });
-
                 this.sipSocket.bind(this.config.sip.localPort, this.config.sip.localIp);
             } catch (error) {
                 reject(error);
@@ -261,14 +219,11 @@ Content-Length: 0\r
         return new Promise((resolve, reject) => {
             this.registerResolve = resolve;
             this.registerReject = reject;
-
             const callId = this.generateCallId();
             const fromTag = this.messageBuilder.generateTag();
             const cseq = 1;
-
             const registerMsg = this.messageBuilder.buildRegister(callId, fromTag, cseq);
             this.sendSipMessage(registerMsg);
-
             setTimeout(() => {
                 if (!this.isRegistered) {
                     reject(new Error('Registration timeout'));
@@ -281,16 +236,15 @@ Content-Length: 0\r
         if (!this.isRegistered) {
             throw new Error('Not registered with SIP server');
         }
-
         const callId = this.generateCallId();
         const fromTag = this.messageBuilder.generateTag();
         const cseq = 1000 + this.callCounter++;
         const rtpPort = await this.rtpStream.createRtpSocket();
-
         const callInfo = {
             callId,
             fromTag,
             cseq,
+            currentCSeq: cseq, // 🔥 ИСПРАВЛЕНИЕ 2: Ведем трекинг текущего CSeq
             targetNumber: phoneNumber,
             rtpPort,
             state: 'init',
@@ -298,29 +252,23 @@ Content-Length: 0\r
             remoteRtpInfo: null,
             audioPlaying: false,
             stopAudio: null,
-            ackSent: false
+            ackSent: false,
+            remoteContact: null
         };
-
         this.activeCalls.set(callId, callInfo);
-
         const inviteMsg = this.messageBuilder.buildOutgoingInvite(
             callId, fromTag, cseq, phoneNumber, rtpPort
         );
-
         await this.sendSipMessage(inviteMsg);
         this.logger.info(`📞 Making call to ${phoneNumber}, callId: ${callId}`);
-
         return callId;
     }
 
     handleSipMessage(message, rinfo) {
         const lines = message.split('\r\n');
         const statusLine = lines[0];
-
         this.logger.debug('📨 Received SIP message:', statusLine);
-
         this.sipHandler.handleMessage(message, rinfo);
-
         let callId = null;
         for (const line of lines) {
             if (line.startsWith('Call-ID:')) {
@@ -328,7 +276,6 @@ Content-Length: 0\r
                 break;
             }
         }
-
         if (statusLine.includes('SIP/2.0 200') && !message.includes('REGISTER') && callId) {
             if (!this.activeCalls.has(callId)) {
                 this.logger.warn(`⚠️ Ignoring 200 OK for unknown call ${callId}`);
@@ -336,7 +283,6 @@ Content-Length: 0\r
             }
             this.handleCallConnected(message, callId);
         }
-
         if (statusLine.includes('SIP/2.0 401') || statusLine.includes('SIP/2.0 407')) {
             this.handleAuthChallenge(message, callId);
         } else if (statusLine.includes('SIP/2.0 200') && message.includes('REGISTER')) {
@@ -354,7 +300,6 @@ Content-Length: 0\r
     handleAuthChallenge(message, callId) {
         const lines = message.split('\r\n');
         const authParams = this.sipAuth.parseAuthChallenge(lines);
-
         if (authParams) {
             if (message.includes('REGISTER')) {
                 const authHeader = this.sipAuth.generateAuthHeader();
@@ -373,15 +318,16 @@ Content-Length: 0\r
     handleAuthRequired(callId, authParams) {
         const call = this.activeCalls.get(callId);
         if (!call) return;
-
+        
+        // Обновляем CSeq при повторной отправке INVITE
+        call.currentCSeq++;
+        
         const authHeader = this.sipAuth.generateAuthHeaderForInvite(
-            call.targetNumber, call.cseq, authParams
+            call.targetNumber, call.currentCSeq, authParams
         );
-
         const authInviteMsg = this.messageBuilder.buildAuthenticatedInvite(
-            call.callId, call.fromTag, call.cseq, call.targetNumber, call.rtpPort, authHeader
+            call.callId, call.fromTag, call.currentCSeq, call.targetNumber, call.rtpPort, authHeader
         );
-
         this.sendSipMessage(authInviteMsg);
         this.logger.info(`🔐 Sent authenticated INVITE for call ${callId}`);
     }
@@ -389,9 +335,7 @@ Content-Length: 0\r
     handleRegisterSuccess() {
         this.isRegistered = true;
         this.logger.info('✅ Successfully registered with SIP server');
-
         this.startKeepAlive();
-
         if (this.registerResolve) {
             this.registerResolve();
         }
@@ -405,59 +349,83 @@ Content-Length: 0\r
             return;
         }
 
-        if (call.ackSent) {
-            this.logger.debug(`🔄 Ignoring duplicate 200 OK for call ${callId}`);
-            return;
-        }
-
         const lines = message.split('\r\n');
         for (const line of lines) {
             if (line.startsWith('To:') && line.includes('tag=')) {
                 const tagMatch = line.match(/tag=([^;]+)/);
-                if (tagMatch) {
-                    call.toTag = tagMatch[1];
+                if (tagMatch) call.toTag = tagMatch[1];
+            }
+            if (line.startsWith('Contact:')) {
+                const contactMatch = line.match(/<([^>]+)>/);
+                if (contactMatch) {
+                    call.remoteContact = contactMatch[1]; 
+                    this.logger.info(`📍 Saved remote contact: ${call.remoteContact}`);
+                }
+            }
+            if (line.startsWith('Record-Route:')) {
+                const routeMatch = line.match(/<([^>]+)>/);
+                if (routeMatch) {
+                    call.route = routeMatch[1];
+                    this.logger.info(`🛣️ Saved Record-Route: ${call.route}`);
                 }
             }
         }
 
-        if (!call.ackSent) {
-            const ackMsg = this.messageBuilder.buildAck(
-                callId, call.fromTag, call.toTag, call.cseq, call.targetNumber
-            );
-            this.sendSipMessage(ackMsg);
-            call.ackSent = true;
-            call.state = 'connected';
-
-            this.startCallKeepAlive(callId);
-
-            this.logger.info(`✅ Call ${callId} connected, sending ACK`);
+        if (call.ackSent) {
+            this.logger.warn(`🔄 Received duplicate 200 OK. Resending ACK for ${callId}...`);
+            this.sendAck(call);
+            return;
         }
+
+        this.sendAck(call);
+        
+        call.ackSent = true;
+        call.state = 'connected';
+
+        this.logger.info(`✅ Call ${callId} connected, sent ACK`);
 
         const remoteRtpInfo = this.parseRemoteRtpInfo(message);
         this.emit('call_connected', callId, remoteRtpInfo);
     }
 
+    async sendAck(call) {
+        const branch = this.messageBuilder.generateBranch();
+        const requestUri = call.remoteContact ? call.remoteContact : `sip:${call.targetNumber}@${this.config.sip.server}`;
+        const routeHeader = call.route ? `Route: <${call.route}>\r\n` : '';
+
+        // ACK использует тот же CSeq, что и INVITE
+        const ackMsg = `ACK ${requestUri} SIP/2.0\r
+Via: SIP/2.0/UDP ${this.config.sip.localIp}:${this.config.sip.localPort};branch=${branch};rport\r
+Max-Forwards: 70\r
+${routeHeader}From: <sip:${this.config.sip.username}@${this.config.sip.server}>;tag=${call.fromTag}\r
+To: <sip:${call.targetNumber}@${this.config.sip.server}>;tag=${call.toTag}\r
+Call-ID: ${call.callId}\r
+CSeq: ${call.currentCSeq} ACK\r
+Contact: <sip:${this.config.sip.username}@${this.config.sip.localIp}:${this.config.sip.localPort}>\r
+User-Agent: ${this.config.sip.userAgent}\r
+Content-Length: 0\r
+\r
+`;
+        await this.sendSipMessage(ackMsg);
+    }
+
+    
     parseRemoteRtpInfo(message) {
         const lines = message.split('\r\n');
         let rtpPort = null;
         let remoteIp = null;
-
         this.logger.debug('🔍 Parsing SDP for RTP info in SIPClient...');
-
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
-
             if (line.startsWith('c=IN IP4')) {
                 remoteIp = line.split(' ')[2];
                 this.logger.debug(`📍 Found remote IP: ${remoteIp}`);
             }
-
             if (line.startsWith('m=audio')) {
                 const parts = line.split(' ');
                 if (parts.length > 1) {
                     rtpPort = parseInt(parts[1]);
                     this.logger.debug(`🎵 Found audio RTP port: ${rtpPort}`);
-
                     for (let j = i + 1; j < lines.length; j++) {
                         const nextLine = lines[j];
                         if (nextLine.startsWith('m=')) {
@@ -472,13 +440,11 @@ Content-Length: 0\r
                 break;
             }
         }
-
         if (!remoteIp || !rtpPort) {
             this.logger.warn('⚠️ Could not parse RTP information from SDP in SIPClient');
         } else {
             this.logger.info(`🎯 RTP destination from SIPClient: ${remoteIp}:${rtpPort}`);
         }
-
         return { remoteIp, rtpPort };
     }
 
@@ -488,40 +454,31 @@ Content-Length: 0\r
             this.logger.error(`❌ Call ${callId} not found for audio playback`);
             return;
         }
-
         if (!remoteRtpInfo || !remoteRtpInfo.remoteIp || !remoteRtpInfo.rtpPort) {
             this.logger.error(`❌ Invalid RTP info for call ${callId}:`, remoteRtpInfo);
             return;
         }
-
         this.logger.info(`🔊 Starting continuous tone for call ${callId} to ${remoteRtpInfo.remoteIp}:${remoteRtpInfo.rtpPort}`);
-
         if (call.stopAudio) {
             call.stopAudio();
         }
-
-        // Просто шум
         call.stopAudio = this.rtpStream.startContinuousTone(
             call.rtpPort,
             remoteRtpInfo.remoteIp,
             remoteRtpInfo.rtpPort,
-            440 
+            440
         );
-
         call.audioPlaying = true;
     }
 
     cleanupCall(callId) {
         const call = this.activeCalls.get(callId);
         if (!call) return;
-
         if (call.stopAudio) {
             call.stopAudio();
             call.audioPlaying = false;
         }
-
         call.state = 'ended';
-
         setTimeout(() => {
             if (this.activeCalls.get(callId)?.state === 'ended') {
                 this.activeCalls.delete(callId);
@@ -537,6 +494,8 @@ Content-Length: 0\r
         this.logger.info(`📞 Hangup call ${callId}`);
 
         if (call.state === 'connected' && call.toTag) {
+            // 🔥 ИСПРАВЛЕНИЕ 3: Увеличиваем CSeq перед отправкой BYE
+            call.currentCSeq++; 
             const byeMsg = this.buildByeMessage(call);
             this.sendSipMessage(byeMsg);
         }
@@ -548,10 +507,8 @@ Content-Length: 0\r
         if (!this.serverAddress) {
             throw new Error('Server address not resolved');
         }
-
         return new Promise((resolve, reject) => {
             const buffer = Buffer.from(message);
-
             this.sipSocket.send(buffer, 0, buffer.length,
                 this.config.sip.port, this.serverAddress, (err) => {
                     if (err) {
@@ -573,13 +530,16 @@ Content-Length: 0\r
 
     buildByeMessage(call) {
         const branch = this.messageBuilder.generateBranch();
-        return `BYE sip:${call.targetNumber}@${this.config.sip.server} SIP/2.0\r
+        const requestUri = call.remoteContact ? call.remoteContact : `sip:${call.targetNumber}@${this.config.sip.server}`;
+        const routeHeader = call.route ? `Route: <${call.route}>\r\n` : '';
+
+        return `BYE ${requestUri} SIP/2.0\r
 Via: SIP/2.0/UDP ${this.config.sip.localIp}:${this.config.sip.localPort};branch=${branch};rport\r
 Max-Forwards: 70\r
-From: <sip:${this.config.sip.username}@${this.config.sip.server}>;tag=${call.fromTag}\r
+${routeHeader}From: <sip:${this.config.sip.username}@${this.config.sip.server}>;tag=${call.fromTag}\r
 To: <sip:${call.targetNumber}@${this.config.sip.server}>;tag=${call.toTag}\r
 Call-ID: ${call.callId}\r
-CSeq: ${call.cseq + 1} BYE\r
+CSeq: ${call.currentCSeq} BYE\r
 User-Agent: ${this.config.sip.userAgent}\r
 Content-Length: 0\r
 \r

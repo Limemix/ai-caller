@@ -4,7 +4,7 @@
   "description": "CallEXP - AI Callcenter for Zadarma (or another SIP Provider)",
   "main": "index.js",
   "scripts": {
-    "start": "export GEMINI_API_KEY=AIzaSyCsKhTnbLixIbjD6r6N0IZ0WKqXSby39vg && node index.js"
+    "start": "node index.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

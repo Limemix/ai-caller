@@ -4,7 +4,7 @@ module.exports = {
         port: 5060,
         username: '528107-101',
         password: 'JedP72cyUF',
-        localPort: 5080,
+        localPort: 5081,
         localIp: process.env.LOCAL_IP || '0.0.0.0',
         userAgent: 'Titan Dnipro/Call2Telegram'
     },

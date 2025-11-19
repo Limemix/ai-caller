@@ -4,7 +4,7 @@ const Logger = require('../utils/Logger');
 class SIPHandler extends EventEmitter {
     constructor() {
         super();
-        this.logger = new Logger();
+        this.logger = new Logger(false);
         this.processedCalls = new Set();
     }
 
@@ -14,7 +14,6 @@ class SIPHandler extends EventEmitter {
         const callId = this.extractCallId(lines);
 
         this.logger.debug('Обработка SIP сообщения:', statusLine);
-
         // Игнорируем повторные 200 OK для уже обработанных звонков
         if (statusLine.includes('SIP/2.0 200') && !message.includes('REGISTER') && callId) {
             if (this.processedCalls.has(callId)) {
@@ -69,6 +68,7 @@ class SIPHandler extends EventEmitter {
             this.handleOptions(message, rinfo);
         } else {
             this.logger.warn('⚠️ Необработанное SIP сообщение:', statusLine);
+	        // console.log(message)
         }
     }
 

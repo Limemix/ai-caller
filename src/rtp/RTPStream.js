@@ -4,7 +4,7 @@ const Logger = require('../utils/Logger');
 class RTPStream {
     constructor(config) {
         this.config = config;
-        this.logger = new Logger();
+        this.logger = new Logger(false);
         this.rtpSockets = new Map();
         this.audioIntervals = new Map();
     }
